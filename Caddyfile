@@ -1,4 +1,5 @@
-ipa.exemple.fr {
+# Le domaine vient du fichier .env (variable DOMAIN) : rien a modifier ici.
+{$DOMAIN:localhost} {
 	request_body {
 		max_size 2GB
 	}

@@ -16,7 +16,9 @@ IPAS = DATA / "ipas"
 IPAS.mkdir(parents=True, exist_ok=True)
 
 TOKEN = os.environ.get("UPLOAD_TOKEN", "")
-PUBLIC_URL = os.environ.get("PUBLIC_URL", "").rstrip("/")
+# Nom de domaine public (ex: ipa.exemple.fr), sans https:// ni slash. Optionnel.
+DOMAIN = (os.environ.get("DOMAIN", "").strip().lower()
+          .removeprefix("https://").removeprefix("http://").strip("/"))
 SOURCE_NAME = os.environ.get("SOURCE_NAME", "Ma source IPA")
 DEV_NAME = os.environ.get("DEVELOPER_NAME", "Moi")
 MAX_MB = int(os.environ.get("MAX_UPLOAD_MB", "2048"))
@@ -31,7 +33,16 @@ PLIST_RE = re.compile(r"^Payload/[^/]+\.app/Info\.plist$")
 
 
 def base_url():
-    return PUBLIC_URL or request.url_root.rstrip("/")
+    """Adresse de base utilisee dans les liens de source.json.
+
+    - Visite par le domaine (DOMAIN) -> https://DOMAIN
+    - Visite en local (http://192.168.x.x:8000, etc.) -> on reprend l'adresse utilisee,
+      donc les liens marchent aussi sur le reseau local.
+    """
+    host = request.host.split(":")[0].lower()
+    if DOMAIN and host == DOMAIN:
+        return f"https://{DOMAIN}"
+    return request.url_root.rstrip("/")
 
 
 def read_ipa(path: Path):
@@ -160,6 +171,7 @@ li{margin:.4rem 0}input,button{font:inherit;padding:.4rem}</style>
 <h1>{{ name }}</h1>
 <p>URL de la source a ajouter dans LiveContainer :</p>
 <p><code>{{ root }}/source.json</code></p>
+{% if domain_url and domain_url != root %}<p>Via ton domaine : <code>{{ domain_url }}/source.json</code></p>{% endif %}
 <h2>Apps ({{ apps|length }})</h2>
 <ul>{% for f, i in apps %}<li><b>{{ i.name }}</b> {{ i.version }} <small>({{ i.bundle }}, {{ (f.stat().st_size/1048576)|round(1) }} Mo)</small>
  — <a href="/ipa/{{ f.name }}">telecharger</a></li>{% else %}<li>Aucune IPA pour l'instant.</li>{% endfor %}</ul>
@@ -173,7 +185,8 @@ li{margin:.4rem 0}input,button{font:inherit;padding:.4rem}</style>
 
 @app.get("/")
 def index():
-    return render_template_string(PAGE, name=SOURCE_NAME, root=base_url(), apps=list_ipas())
+    return render_template_string(PAGE, name=SOURCE_NAME, root=base_url(), apps=list_ipas(),
+                                  domain_url=f"https://{DOMAIN}" if DOMAIN else "")
 
 
 @app.get("/health")

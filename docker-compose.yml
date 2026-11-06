@@ -8,9 +8,9 @@ services:
     env_file: .env
     volumes:
       - ./data:/data
-    # Port 8000 uniquement en local : c'est Caddy qui est expose a Internet
+    # Acces local sur http://IP-du-serveur:8000 (reglable dans .env : BIND_ADDRESS, HTTP_PORT)
     ports:
-      - "127.0.0.1:8000:8000"
+      - "${BIND_ADDRESS:-0.0.0.0}:${HTTP_PORT:-8000}:8000"
 
   # Optionnel : HTTPS automatique si tu as un nom de domaine
   # Lancer avec : docker compose --profile https up -d
@@ -19,6 +19,8 @@ services:
     profiles: ["https"]
     container_name: ipa-caddy
     restart: unless-stopped
+    environment:
+      DOMAIN: ${DOMAIN:-localhost}
     ports:
       - "80:80"
       - "443:443"

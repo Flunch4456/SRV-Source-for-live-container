@@ -23,7 +23,7 @@ with zipfile.ZipFile(sys.argv[1], "w") as z:
 EOF
 
 docker run -d --name "$NAME" -p "127.0.0.1:$PORT:8000" \
-  -e UPLOAD_TOKEN=smoke -e PUBLIC_URL=https://ipa.test "$IMAGE" >/dev/null
+  -e UPLOAD_TOKEN=smoke -e DOMAIN=ipa.test "$IMAGE" >/dev/null
 
 echo "Attente du serveur..."
 for _ in $(seq 1 30); do
@@ -39,8 +39,16 @@ code=$(curl -s -o /dev/null -w "%{http_code}" -F file=@"$TMP/Test.ipa" "http://1
 echo "Upload avec token"
 curl -fs -H "X-Token: smoke" -F file=@"$TMP/Test.ipa" "http://127.0.0.1:$PORT/upload" >/dev/null
 
-echo "Verification de source.json"
+echo "source.json en local : les liens reprennent l'adresse utilisee"
 curl -fs "http://127.0.0.1:$PORT/source.json" | python3 -c '
+import json, sys
+app = json.load(sys.stdin)["apps"][0]
+assert app["downloadURL"] == "http://127.0.0.1:18000/ipa/Test.ipa", app["downloadURL"]
+print("OK local :", app["downloadURL"])
+'
+
+echo "source.json via le domaine : les liens passent en https://DOMAIN"
+curl -fs -H "Host: ipa.test" "http://127.0.0.1:$PORT/source.json" | python3 -c '
 import json, sys
 d = json.load(sys.stdin)
 app = d["apps"][0]
