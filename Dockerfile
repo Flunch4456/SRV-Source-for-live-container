@@ -10,5 +10,7 @@ ENV DATA_DIR=/data
 VOLUME /data
 EXPOSE 8000
 
-# timeout long : un gros IPA peut prendre du temps a uploader
-CMD ["gunicorn", "-b", "0.0.0.0:8000", "-w", "2", "--timeout", "600", "app.main:app"]
+# Workers a threads (gthread) : un reverse proxy (Zoraxy, Cloudflare...) garde souvent des connexions
+# ouvertes sans rien envoyer ; avec des workers "sync" elles bloquaient tout le serveur.
+# Le timeout ne coupe pas un upload en cours avec gthread, il sert juste a relancer un worker fige.
+CMD ["gunicorn", "-b", "0.0.0.0:8000", "-w", "2", "-k", "gthread", "--threads", "8", "--timeout", "120", "--keep-alive", "5", "app.main:app"]
