@@ -1,0 +1,32 @@
+services:
+  ipa:
+    # Image publiee a chaque release (docker compose pull) ; "build" permet aussi de la construire en local
+    image: ghcr.io/flunch4456/srv-source-for-live-container:latest
+    build: .
+    container_name: ipa-server
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      - ./data:/data
+    # Port 8000 uniquement en local : c'est Caddy qui est expose a Internet
+    ports:
+      - "127.0.0.1:8000:8000"
+
+  # Optionnel : HTTPS automatique si tu as un nom de domaine
+  # Lancer avec : docker compose --profile https up -d
+  caddy:
+    image: caddy:2
+    profiles: ["https"]
+    container_name: ipa-caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+    depends_on:
+      - ipa
+
+volumes:
+  caddy_data:

@@ -1,0 +1,6 @@
+ipa.exemple.fr {
+	request_body {
+		max_size 2GB
+	}
+	reverse_proxy ipa:8000
+}
