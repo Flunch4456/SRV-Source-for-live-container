@@ -7,7 +7,12 @@ services:
     restart: unless-stopped
     env_file: .env
     volumes:
-      - ./data:/data
+      - ./data:/data   # base de donnees (db.sqlite), IPA, icones : a sauvegarder
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
     # Acces local sur http://IP-du-serveur:8000 (reglable dans .env : BIND_ADDRESS, HTTP_PORT)
     ports:
       - "${BIND_ADDRESS:-0.0.0.0}:${HTTP_PORT:-8000}:8000"

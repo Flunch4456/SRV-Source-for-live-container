@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}Connexion · {{ source_name }}{% endblock %}
+{% block body %}
+<section class="narrow">
+  <h1>Panel admin</h1>
+  <p class="muted">Réservé à l'import et à la gestion des IPA.</p>
+  {% if error %}<p class="flash err">{{ error }}</p>{% endif %}
+  <form method="post" class="stack">
+    <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+    <label>Mot de passe
+      <input type="password" name="password" autocomplete="current-password" autofocus required>
+    </label>
+    <button class="btn">Se connecter</button>
+  </form>
+</section>
+{% endblock %}

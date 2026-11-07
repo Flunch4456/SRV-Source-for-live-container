@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% from "_macros.html" import icon %}
+{% set a = item.app %}
+{% block title %}{{ a.name }} · {{ source_name }}{% endblock %}
+{% block body %}
+<p><a href="{{ url_for('index') }}">← Catalogue</a></p>
+<section class="app-head">
+  {{ icon(a, "big") }}
+  <div>
+    <h1>{{ a.name }}</h1>
+    <p class="muted">{{ a.subtitle }}{% if a.subtitle and a.developer %} · {% endif %}{{ a.developer }}</p>
+    <p class="muted"><code>{{ a.bundle }}</code></p>
+  </div>
+</section>
+{% if a.description %}<p class="desc">{{ a.description }}</p>{% endif %}
+
+<h2>Versions</h2>
+<div class="versions">
+  {% for v in item.versions %}
+    <article class="card version">
+      <div>
+        <strong>{{ v.version }}</strong>{% if v.build %} <span class="muted">({{ v.build }})</span>{% endif %}
+        {% if loop.first %}<span class="badge">dernière</span>{% endif %}
+        <p class="muted">{{ v.uploaded_at|fdate }} · {{ v.size|filesize }} · iOS {{ v.min_os }}+</p>
+        {% if v.notes %}<p class="notes">{{ v.notes }}</p>{% endif %}
+        <p class="muted small">SHA-256 : <code>{{ v.sha256[:16] }}…</code></p>
+      </div>
+      <div class="actions">
+        <a class="btn" href="{{ dl_url(v, a.name) }}">Télécharger</a>
+        <a class="btn ghost" href="livecontainer://install?url={{ (root ~ dl_url(v, a.name))|urlencode }}">Ouvrir dans LiveContainer</a>
+      </div>
+    </article>
+  {% endfor %}
+</div>
+{% endblock %}

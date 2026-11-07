@@ -1,13 +1,19 @@
 # Serveur de source IPA pour LiveContainer
 
-Petit serveur qui héberge tes IPA et génère automatiquement une **source au format AltStore** (`/source.json`), que LiveContainer sait lire.
+Un petit serveur auto-hébergé : tu importes tes IPA dans un **panel admin privé**, et elles sont rangées par app et par version dans une base de données. Le **catalogue public** liste les apps et permet de les installer à distance, via une **source au format AltStore** (`/source.json`) que LiveContainer sait lire.
+
+| | Accès |
+|---|---|
+| Catalogue (`/`), page d'une app, téléchargements, `/source.json` | **Public** |
+| Panel admin (`/admin`) : import, versions, infos, icônes, suppression | **Privé** (mot de passe) |
+| Envoi en ligne de commande (`/api/upload`) | **Privé** (token) |
 
 ## Fonctionnement
 
-- Tu déposes un `.ipa` (via la page web, `curl`, ou directement dans `data/ipas/`).
-- Le serveur ouvre l'IPA (c'est un zip), lit son `Info.plist` et récupère nom, bundle ID, version.
-- `/source.json` est régénéré à chaque requête : pas de base de données, pas de fichier à éditer.
-- Une image `MonApp.png` à côté de `MonApp.ipa` devient son icône.
+- Tu envoies un `.ipa` dans le panel. Le serveur l'ouvre (c'est un zip), lit son `Info.plist` et en tire le nom, le bundle ID et la version.
+- Les apps sont regroupées par bundle ID, avec toutes leurs versions (la plus récente en premier, `1.10` après `1.9`).
+- Tout vit dans `data/` : `db.sqlite` (la base), `ipas/` (les fichiers), `icons/`. **Sauvegarde ce dossier** pour ne rien perdre.
+- Une version déjà présente est refusée (supprime-la d'abord pour la remplacer).
 
 ## Installation sur une VM ou un LXC Debian 13
 
@@ -33,19 +39,32 @@ apt install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker
 git clone https://github.com/Flunch4456/SRV-Source-for-live-container.git
 cd SRV-Source-for-live-container
 cp .env.example .env
-nano .env            # change UPLOAD_TOKEN et DOMAIN
+nano .env            # change ADMIN_PASSWORD et DOMAIN
 
-# 3. Lancer (construit l'image en local, ne dépend de rien d'autre)
+# 3. Lancer (construit l'image en local)
 docker compose up -d --build
 ```
 
 Test : `curl http://127.0.0.1:8000/health` doit répondre `ok`.
 
+### Configuration (`.env`)
+
+| Variable | Rôle |
+|---|---|
+| `ADMIN_PASSWORD` | Mot de passe du panel `/admin`. À défaut, `UPLOAD_TOKEN` sert de mot de passe. |
+| `UPLOAD_TOKEN` | Token pour l'envoi par `curl`. Vide = API d'envoi désactivée. |
+| `DOMAIN` | Ton domaine, sans `https://` (ex. `ipa.exemple.fr`). Les liens de `source.json` en dépendent. |
+| `BIND_ADDRESS`, `HTTP_PORT` | Port exposé sur le réseau local (par défaut `0.0.0.0:8000`). |
+| `SOURCE_NAME`, `DEVELOPER_NAME` | Nom affiché de la source, développeur par défaut des apps. |
+| `MAX_UPLOAD_MB` | Taille maximale d'un envoi (2048 par défaut). |
+
+Une valeur laissée à `change-moi` est refusée : le panel reste fermé tant que tu n'as pas mis un vrai mot de passe.
+
 ### Accès en local et domaine
 
-- **Réseau local** : `http://IP-du-serveur:8000`. Les liens de `source.json` reprennent l'adresse utilisée, donc tout marche en local sans domaine.
-- **Domaine** : mets-le dans `.env` (`DOMAIN=ipa.exemple.fr`, sans `https://`). Quand on passe par ce domaine, les liens deviennent `https://ipa.exemple.fr/...`.
-- **Changer de domaine** : modifie `DOMAIN` dans `.env`, puis `docker compose up -d`. Rien d'autre à toucher (Caddy lit aussi cette variable).
+- **Réseau local** : `http://IP-du-serveur:8000`. Les liens reprennent l'adresse utilisée.
+- **Domaine** : quand on passe par `DOMAIN`, les liens deviennent `https://ton-domaine/...`.
+- **Changer de domaine** : modifie `DOMAIN` dans `.env`, puis `docker compose up -d`.
 
 ### Mettre à jour
 
@@ -53,80 +72,65 @@ Test : `curl http://127.0.0.1:8000/health` doit répondre `ok`.
 git pull && docker compose up -d --build
 ```
 
-Tes IPA sont dans `data/` (hors de l'image), elles ne sont jamais perdues lors d'une mise à jour.
+Tes données (`data/`) ne sont pas touchées. Les IPA déposées à plat dans `data/ipas/` par une ancienne version du serveur sont reprises automatiquement au démarrage.
 
-### Variante : image prête à l'emploi
+## Utiliser le panel admin
 
-Chaque release publie une image sur GitHub (`ghcr.io/flunch4456/srv-source-for-live-container`, en amd64 et arm64). Au lieu de `--build` :
+1. Ouvre `/admin` et connecte-toi avec `ADMIN_PASSWORD`.
+2. **Importer** : choisis un ou plusieurs `.ipa`, ajoute des notes de version si tu veux, envoie.
+3. Clique sur une app pour **ajouter une version**, modifier son nom, sous-titre, description, développeur, **changer l'icône** (PNG/JPEG), éditer les notes de chaque version ou **supprimer** une version ou l'app entière.
 
-```bash
-docker compose pull && docker compose up -d
-```
+Une app sans aucune version n'apparaît plus dans le catalogue public.
 
-> Si le `pull` est refusé, ouvre le paquet sur GitHub (profil → Packages) → Package settings → passe sa visibilité en **Public**. C'est à faire une seule fois.
+**Limite Cloudflare :** derrière le proxy Cloudflare (nuage orange), les envois sont plafonnés à **100 Mo** sur l'offre gratuite. Pour importer une grosse IPA, ouvre le panel par l'adresse locale (`http://IP-du-serveur:8000/admin`). Les téléchargements depuis l'iPhone, eux, passent normalement par le domaine.
 
-## Faire une nouvelle release
-
-Les GitHub Actions s'en chargent. À chaque push, `ci.yml` construit l'image et lance `scripts/smoke-test.sh`. Pour publier :
+### Envoi en ligne de commande
 
 ```bash
-git tag v1.0.1 && git push origin v1.0.1
+curl -H "X-Token: TON_TOKEN" -F "file=@MonApp.ipa" -F "notes=Correctifs" https://ton-domaine/api/upload
 ```
-
-Le workflow `release.yml` rejoue le test, publie l'image Docker et crée la release GitHub avec une archive du projet.
-
-## Le rendre accessible depuis n'importe où
-
-LiveContainer télécharge depuis ton iPhone, donc l'URL doit être joignable depuis Internet, et en HTTPS de préférence (iOS bloque souvent le HTTP simple). Trois options :
-
-### Option A, Cloudflare Tunnel (la plus simple, aucun port à ouvrir)
-
-Pas besoin de toucher à ta box. Sur la VM :
-
-```bash
-cloudflared tunnel --url http://127.0.0.1:8000     # test rapide, URL temporaire
-```
-
-Pour une URL fixe, crée un tunnel nommé avec ton domaine dans Cloudflare Zero Trust (service cible : `http://localhost:8000`), puis mets ce domaine dans `DOMAIN` (fichier `.env`).
-
-### Option B, Caddy + nom de domaine (HTTPS automatique)
-
-1. Un nom de domaine (ou DuckDNS gratuit) qui pointe vers l'IP publique de ta box.
-2. Sur la box : rediriger les ports **80 et 443** vers la VM.
-3. Mets ton domaine dans `DOMAIN` (fichier `.env`) : le `Caddyfile` le lit, rien à y modifier.
-4. `docker compose --profile https up -d`
-
-### Option C, Tailscale (privé, pas vraiment « public »)
-
-Installe Tailscale sur la VM et l'iPhone : tu y accèdes de partout sans rien exposer. Idéal si tu es seul à l'utiliser.
 
 ## Ajouter la source dans LiveContainer
 
-Dans LiveContainer, onglet **Sources** → **+** → colle `https://ton-domaine/source.json`.
+Dans LiveContainer, ajoute la source `https://ton-domaine/source.json` (l'adresse est aussi affichée, avec un bouton « Copier », en haut du catalogue). La page de chaque app propose aussi un lien « Ouvrir dans LiveContainer ».
 
-## Envoyer une IPA
+## Le rendre accessible depuis n'importe où
 
-- **Page web** : `https://ton-domaine/` → champ token + fichier.
-- **curl** (pratique depuis un PC) :
+LiveContainer télécharge depuis ton iPhone : l'URL doit être joignable depuis Internet, en HTTPS de préférence.
 
-```bash
-curl -H "X-Token: TON_TOKEN" -F "file=@MonApp.ipa" -F "file=@MonApp.png" https://ton-domaine/upload
-```
-
-- **Directement** : copie le fichier dans `data/ipas/` (aucun redémarrage nécessaire).
+- **Zoraxy / Nginx / autre reverse proxy** (cas actuel) : cible `http://IP-du-serveur:8000`, HTTPS géré par le proxy. Mets ton domaine dans `DOMAIN`.
+- **Cloudflare Tunnel** : service cible `http://localhost:8000`, domaine dans `DOMAIN`.
+- **Caddy intégré** (HTTPS automatique, ports 80/443 à rediriger) : `docker compose --profile https up -d`.
+- **Tailscale** : accès privé de partout, sans rien exposer.
 
 ## Sécurité
 
-- Seul l'**upload et la suppression** demandent le token. Quiconque connaît l'URL peut **télécharger** les IPA : n'y mets rien de privé ou de payant.
-- Garde un `UPLOAD_TOKEN` long (`openssl rand -hex 24`).
-- N'héberge que des apps dont tu as le droit de distribuer/utiliser le code.
+- Le **catalogue et les IPA sont publics** : n'héberge que des apps que tu as le droit de distribuer. Rien de privé ni de payant.
+- Le panel est protégé par mot de passe (comparaison à temps constant, 5 essais ratés = blocage 10 min, protection CSRF, cookie de session `HttpOnly`).
+- Sur le réseau local en `http://`, le mot de passe circule sans chiffrement : pour te connecter hors de chez toi, utilise toujours l'adresse `https://`.
+- Les IPA et icônes sont stockées sous des noms aléatoires : aucun nom de fichier envoyé n'est utilisé sur le disque.
+
+## Développement et releases
+
+```bash
+pip install -r requirements-dev.txt && pytest
+```
+
+À chaque push, GitHub Actions lance les tests, construit l'image et joue `scripts/smoke-test.sh` (catalogue, panel, import, `source.json`, redémarrage). Pour publier une version :
+
+```bash
+git tag v1.1.0 && git push origin v1.1.0
+```
+
+Le workflow `release.yml` rejoue les tests, publie l'image Docker sur `ghcr.io` (amd64 et arm64) et crée la release GitHub.
 
 ## Dépannage
 
 | Problème | Cause probable |
 |---|---|
-| Source vide dans LiveContainer | IPA invalide (pas de `Payload/X.app/Info.plist`) |
-| Liens de téléchargement faux | `DOMAIN` mal renseigné dans `.env` (sans `https://`), ou le proxy ne transmet pas le nom d'hôte |
+| Impossible de se connecter au panel | `ADMIN_PASSWORD` vide ou resté à `change-moi` ; ou 5 essais ratés (attends 10 min) |
+| Source vide dans LiveContainer | Aucune version importée, ou IPA invalide (pas de `Payload/X.app/Info.plist`) |
+| Liens de téléchargement faux | `DOMAIN` mal renseigné (sans `https://`), ou le proxy ne transmet pas le nom d'hôte |
 | Téléchargement impossible sur iPhone | Source ajoutée en `http://` : utilise l'adresse `https://` du domaine |
-| Upload refusé (413) | Fichier plus gros que `MAX_UPLOAD_MB` |
-| Upload refusé (403) | Mauvais token |
+| Envoi refusé (413 ou coupure) | Fichier plus gros que `MAX_UPLOAD_MB`, ou limite de 100 Mo de Cloudflare |
+| « existe déjà » à l'import | Cette version est déjà dans le catalogue : supprime-la d'abord |

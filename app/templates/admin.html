@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% from "_macros.html" import icon %}
+{% block title %}Admin · {{ source_name }}{% endblock %}
+{% block body %}
+<h1>Panel admin</h1>
+<p class="muted">{{ stats.apps }} app(s) · {{ stats.versions }} version(s) · {{ stats.size|filesize }} utilisés · {{ stats.free|filesize }} libres</p>
+
+<section class="panel">
+  <h2>Importer des IPA</h2>
+  <form method="post" action="{{ url_for('admin_upload') }}" enctype="multipart/form-data" class="stack" data-upload>
+    <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+    <label>Fichiers .ipa (plusieurs possibles)
+      <input type="file" name="file" accept=".ipa" multiple required>
+    </label>
+    <label>Notes de version (optionnel, appliquées à tous les fichiers)
+      <textarea name="notes" rows="2" maxlength="2000"></textarea>
+    </label>
+    <div class="actions">
+      <button type="submit" class="btn">Envoyer</button>
+      <progress max="100" value="0" hidden></progress>
+      <span class="upmsg muted"></span>
+    </div>
+    <p class="muted small">Nom, bundle ID et version sont lus automatiquement dans l'IPA. Taille maximale : {{ max_mb }} Mo.</p>
+    {% if via_domain %}
+      <p class="flash warn">Tu es connecté par le domaine : si Cloudflare est activé (nuage orange), les envois sont limités à 100 Mo. Pour un gros fichier, ouvre ce panel par l'adresse locale (http://IP-du-serveur:8000/admin).</p>
+    {% endif %}
+  </form>
+</section>
+
+<h2>Apps</h2>
+{% if items %}
+  <div class="list">
+    {% for item in items %}
+      {% set a = item.app %}
+      <a class="card row link-card" href="{{ url_for('admin_app', bundle=a.bundle) }}">
+        {{ icon(a) }}
+        <div class="grow">
+          <strong>{{ a.name }}</strong> <span class="muted">{{ a.bundle }}</span>
+          <p class="muted">
+            {% if item.latest %}Dernière : {{ item.latest.version }} · {{ item.versions|length }} version(s)
+            {% else %}Aucune version (invisible du public){% endif %}
+          </p>
+        </div>
+      </a>
+    {% endfor %}
+  </div>
+{% else %}
+  <p class="empty">Aucune app. Importe ta première IPA ci-dessus.</p>
+{% endif %}
+{% endblock %}

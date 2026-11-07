@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+{% from "_macros.html" import icon %}
+{% set a = item.app %}
+{% block title %}{{ a.name }} · Admin{% endblock %}
+{% block body %}
+<p><a href="{{ url_for('dashboard') }}">← Panel admin</a></p>
+<section class="app-head">
+  {{ icon(a, "big") }}
+  <div>
+    <h1>{{ a.name }}</h1>
+    <p class="muted"><code>{{ a.bundle }}</code> ·
+      {% if item.versions %}<a href="{{ url_for('app_page', bundle=a.bundle) }}">voir la page publique</a>
+      {% else %}pas encore visible du public{% endif %}</p>
+  </div>
+</section>
+
+<section class="panel">
+  <h2>Ajouter une version</h2>
+  <form method="post" action="{{ url_for('admin_upload') }}" enctype="multipart/form-data" class="stack" data-upload>
+    <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+    <input type="hidden" name="bundle" value="{{ a.bundle }}">
+    <label>Fichier .ipa de cette app
+      <input type="file" name="file" accept=".ipa" multiple required>
+    </label>
+    <label>Notes de version (optionnel)
+      <textarea name="notes" rows="2" maxlength="2000"></textarea>
+    </label>
+    <div class="actions">
+      <button type="submit" class="btn">Envoyer</button>
+      <progress max="100" value="0" hidden></progress>
+      <span class="upmsg muted"></span>
+    </div>
+  </form>
+</section>
+
+<section class="panel">
+  <h2>Versions</h2>
+  {% if item.versions %}
+    <div class="versions">
+      {% for v in item.versions %}
+        <article class="card version">
+          <div class="grow">
+            <strong>{{ v.version }}</strong>{% if v.build %} <span class="muted">({{ v.build }})</span>{% endif %}
+            {% if loop.first %}<span class="badge">dernière</span>{% endif %}
+            <p class="muted">{{ v.uploaded_at|fdate }} · {{ v.size|filesize }} · iOS {{ v.min_os }}+ · <code>{{ v.sha256[:12] }}…</code></p>
+            <form method="post" action="{{ url_for('admin_version_notes', vid=v.id) }}" class="inline-form">
+              <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+              <input type="text" name="notes" value="{{ v.notes }}" placeholder="Notes de version" maxlength="2000">
+              <button class="btn small ghost">Enregistrer</button>
+            </form>
+          </div>
+          <div class="actions">
+            <a class="btn small ghost" href="{{ dl_url(v, a.name) }}">Télécharger</a>
+            <form method="post" action="{{ url_for('admin_version_delete', vid=v.id) }}"
+                  data-confirm="Supprimer la version {{ v.version }} ? Le fichier sera effacé.">
+              <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+              <button class="btn small danger">Supprimer</button>
+            </form>
+          </div>
+        </article>
+      {% endfor %}
+    </div>
+  {% else %}
+    <p class="empty">Aucune version.</p>
+  {% endif %}
+</section>
+
+<section class="panel">
+  <h2>Informations</h2>
+  <form method="post" action="{{ url_for('admin_app_update', bundle=a.bundle) }}" class="stack">
+    <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+    <label>Nom <input type="text" name="name" value="{{ a.name }}" maxlength="100" required></label>
+    <label>Sous-titre <input type="text" name="subtitle" value="{{ a.subtitle }}" maxlength="120"></label>
+    <label>Développeur <input type="text" name="developer" value="{{ a.developer }}" maxlength="100"></label>
+    <label>Description <textarea name="description" rows="4" maxlength="2000">{{ a.description }}</textarea></label>
+    <div><button class="btn">Enregistrer</button></div>
+  </form>
+
+  <h3>Icône</h3>
+  <form method="post" action="{{ url_for('admin_icon', bundle=a.bundle) }}" enctype="multipart/form-data" class="inline-form">
+    <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+    <input type="file" name="icon" accept="image/png,image/jpeg" required>
+    <button class="btn small">Envoyer l'icône</button>
+  </form>
+  {% if a.icon %}
+    <form method="post" action="{{ url_for('admin_icon_delete', bundle=a.bundle) }}">
+      <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+      <button class="btn small ghost">Retirer l'icône</button>
+    </form>
+  {% endif %}
+  <p class="muted small">PNG ou JPEG classique, 2 Mo maximum (une icône extraite telle quelle d'une IPA est parfois dans un format iOS illisible).</p>
+</section>
+
+<section class="panel danger-zone">
+  <h2>Zone dangereuse</h2>
+  <form method="post" action="{{ url_for('admin_app_delete', bundle=a.bundle) }}"
+        data-confirm="Supprimer {{ a.name }} et TOUTES ses versions ? C'est définitif.">
+    <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+    <button class="btn danger">Supprimer l'app et toutes ses versions</button>
+  </form>
+</section>
+{% endblock %}

@@ -1,0 +1,14 @@
+{% macro icon(app, size="") %}
+  {% if app.icon %}
+    <img class="icon {{ size }}" src="{{ url_for('icon', name=app.icon) }}" alt="" loading="lazy">
+  {% else %}
+    <span class="icon ph {{ size }}">{{ app.name[:1]|upper }}</span>
+  {% endif %}
+{% endmacro %}
+
+{% macro source_box(root) %}
+  <div class="copy">
+    <code id="src">{{ root }}/source.json</code>
+    <button type="button" class="btn small" data-copy="#src">Copier</button>
+  </div>
+{% endmacro %}
